@@ -1,0 +1,6 @@
+{
+  "name": "Night Commute Guide",
+  "description": "Weekend night travel guide connecting ride-sharing, public transit, and safe walking paths for late-night commutes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
