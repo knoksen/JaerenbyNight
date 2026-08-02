@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,11 +29,14 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Nightlife
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -50,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,8 +66,10 @@ import com.example.R
 import com.example.data.model.LocationSpot
 import com.example.data.model.RouteOption
 import com.example.data.model.TransportMode
+import com.example.ui.components.FrequentDestinationsCard
 import com.example.ui.components.RouteMapCanvas
 import com.example.ui.components.RouteOptionCard
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.theme.MidnightBackground
 import com.example.ui.theme.MidnightCardBorder
 import com.example.ui.theme.MidnightSurface
@@ -71,6 +80,8 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.NightViewModel
+import com.example.util.LocationHelper
+import com.example.util.NearbyTransitStation
 
 @Composable
 fun RoutePlannerTab(
@@ -89,7 +100,38 @@ fun RoutePlannerTab(
     var showDestMenu by remember { mutableStateOf(false) }
     var showTimeMenu by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val locationHelper = remember(context) { LocationHelper(context) }
+    var nearbyStations by remember { mutableStateOf<List<NearbyTransitStation>>(emptyList()) }
+    var locationStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isRequestingLocation by remember { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fineGranted || coarseGranted) {
+            isRequestingLocation = true
+            locationHelper.fetchCurrentLocation(
+                onLocationRetrieved = { loc ->
+                    nearbyStations = locationHelper.getNearbyTransitStations(loc)
+                    locationStatusMessage = "Found ${nearbyStations.size} nearby transit stations!"
+                    isRequestingLocation = false
+                },
+                onError = { err ->
+                    locationStatusMessage = err
+                    isRequestingLocation = false
+                }
+            )
+        } else {
+            locationStatusMessage = "Location permission denied."
+            isRequestingLocation = false
+        }
+    }
+
     val timeSlots = listOf("Friday 1:15 AM", "Friday 2:30 AM", "Saturday 1:00 AM", "Saturday 2:45 AM", "Sunday 12:30 AM")
+    val frequentDestinations by viewModel.frequentDestinations.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier
@@ -361,6 +403,118 @@ fun RoutePlannerTab(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Nearby Transit Station GPS Button
+                Button(
+                    onClick = {
+                        if (locationHelper.hasLocationPermission()) {
+                            isRequestingLocation = true
+                            locationHelper.fetchCurrentLocation(
+                                onLocationRetrieved = { loc ->
+                                    nearbyStations = locationHelper.getNearbyTransitStations(loc)
+                                    locationStatusMessage = "Found ${nearbyStations.size} nearby transit stations!"
+                                    isRequestingLocation = false
+                                },
+                                onError = { err ->
+                                    locationStatusMessage = err
+                                    isRequestingLocation = false
+                                }
+                            )
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("request_gps_location_button"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MidnightSurfaceVariant,
+                        contentColor = NeonCyan
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.MyLocation, contentDescription = "GPS", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isRequestingLocation) "Detecting Location..." else "Find Nearby Stations (GPS)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                locationStatusMessage?.let { msg ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = msg,
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+
+                if (nearbyStations.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "NEARBY TRANSIT STATIONS",
+                        color = NeonCyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    nearbyStations.forEach { station ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MidnightBackground)
+                                .clickable {
+                                    viewModel.setOrigin(
+                                        LocationSpot(
+                                            id = station.id,
+                                            name = station.name,
+                                            address = station.lineInfo,
+                                            latitude = station.latitude,
+                                            longitude = station.longitude,
+                                            category = "Nearby Station"
+                                        )
+                                    )
+                                }
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = station.name, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(text = "${station.lineInfo} • ${station.walkTimeMinutes} min walk (${station.distanceMeters}m)", color = TextMuted, fontSize = 10.sp)
+                            }
+                            Text(text = "Use as Origin", color = NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Trip Planner (Room Database Saved Destinations & Preferred Transport Modes)
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                FrequentDestinationsCard(
+                    frequentDestinations = frequentDestinations,
+                    onSelectDestination = { dest -> viewModel.applyFrequentDestination(dest) },
+                    onAddDestination = { title, address, category, preferredMode, notes ->
+                        viewModel.addFrequentDestination(title, address, category, preferredMode, notes)
+                    },
+                    onDeleteDestination = { id -> viewModel.deleteFrequentDestination(id) }
+                )
             }
         }
 

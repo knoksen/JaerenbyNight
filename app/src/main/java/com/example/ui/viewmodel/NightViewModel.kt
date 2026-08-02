@@ -3,7 +3,10 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.db.CachedMapTileEntity
+import com.example.data.db.CachedTransitScheduleEntity
 import com.example.data.db.EmergencyContactEntity
+import com.example.data.db.FrequentDestinationEntity
 import com.example.data.db.NightDatabase
 import com.example.data.db.NightSafetyLogEntity
 import com.example.data.db.SavedRouteEntity
@@ -29,7 +32,7 @@ class NightViewModel(application: Application) : AndroidViewModel(application) {
         val database = NightDatabase.getDatabase(application)
         repository = NightRouteRepository(database.nightDao())
 
-        // Seed default emergency contact if empty
+        // Seed default emergency contacts & frequent destinations if empty
         viewModelScope.launch {
             repository.emergencyContacts.collect { contacts ->
                 if (contacts.isEmpty()) {
@@ -47,6 +50,114 @@ class NightViewModel(application: Application) : AndroidViewModel(application) {
                             phone = "+1 (555) 010-9911",
                             relationship = "Campus Security Patrol",
                             isPrimary = false
+                        )
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.frequentDestinations.collect { list ->
+                if (list.isEmpty()) {
+                    repository.addFrequentDestination(
+                        FrequentDestinationEntity(
+                            title = "Oakridge Heights (Home)",
+                            address = "314 Oakridge Rd, Residential Safe Area",
+                            category = "Home",
+                            preferredMode = "HYBRID",
+                            latitude = 37.7620,
+                            longitude = -122.4350,
+                            notes = "Primary residence • Lit entry path"
+                        )
+                    )
+                    repository.addFrequentDestination(
+                        FrequentDestinationEntity(
+                            title = "University Student Library",
+                            address = "500 College Way, North Campus",
+                            category = "Campus",
+                            preferredMode = "TRANSIT_WALK",
+                            latitude = 37.7830,
+                            longitude = -122.4080,
+                            notes = "Late night study desk"
+                        )
+                    )
+                    repository.addFrequentDestination(
+                        FrequentDestinationEntity(
+                            title = "Downtown Neon Square",
+                            address = "742 Main St & 5th Ave",
+                            category = "Nightlife",
+                            preferredMode = "RIDESHARE",
+                            latitude = 37.7749,
+                            longitude = -122.4194,
+                            notes = "Weekend meetups & dining"
+                        )
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.cachedTransitSchedules.collect { list ->
+                if (list.isEmpty()) {
+                    repository.cacheTransitSchedule(
+                        CachedTransitScheduleEntity(
+                            stationId = "st_central_metro",
+                            stationName = "Central Metro Terminal",
+                            lineCode = "Night Line N1",
+                            nextDeparturesJson = "1:28 AM, 1:45 AM, 2:05 AM, 2:30 AM",
+                            isOfflineAvailable = true
+                        )
+                    )
+                    repository.cacheTransitSchedule(
+                        CachedTransitScheduleEntity(
+                            stationId = "st_campus_bus",
+                            stationName = "North Campus Terminal",
+                            lineCode = "Night Bus N40",
+                            nextDeparturesJson = "1:25 AM, 1:35 AM, 1:45 AM, 2:00 AM",
+                            isOfflineAvailable = true
+                        )
+                    )
+                    repository.cacheTransitSchedule(
+                        CachedTransitScheduleEntity(
+                            stationId = "st_grand_ave",
+                            stationName = "Grand & 4th Rideshare Hub",
+                            lineCode = "Uber/Lyft Safe Zone",
+                            nextDeparturesJson = "Continuous ~3 min wait",
+                            isOfflineAvailable = true
+                        )
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.cachedMapTiles.collect { list ->
+                if (list.isEmpty()) {
+                    repository.cacheMapTile(
+                        CachedMapTileEntity(
+                            tileKey = "z14_x4124_y6210",
+                            regionName = "Downtown & Central Transit District",
+                            zoomLevel = 14,
+                            dataSizeBytes = 384000,
+                            isOfflineReady = true
+                        )
+                    )
+                    repository.cacheMapTile(
+                        CachedMapTileEntity(
+                            tileKey = "z14_x4125_y6211",
+                            regionName = "North Campus & University Corridor",
+                            zoomLevel = 14,
+                            dataSizeBytes = 412000,
+                            isOfflineReady = true
+                        )
+                    )
+                    repository.cacheMapTile(
+                        CachedMapTileEntity(
+                            tileKey = "z15_x8250_y12422",
+                            regionName = "Oakridge Heights Residential Vector Tile",
+                            zoomLevel = 15,
+                            dataSizeBytes = 256000,
+                            isOfflineReady = true
                         )
                     )
                 }
@@ -109,6 +220,18 @@ class NightViewModel(application: Application) : AndroidViewModel(application) {
 
     val safetyLogs: StateFlow<List<NightSafetyLogEntity>> = repository.safetyLogs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val frequentDestinations: StateFlow<List<FrequentDestinationEntity>> = repository.frequentDestinations
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val cachedTransitSchedules: StateFlow<List<CachedTransitScheduleEntity>> = repository.cachedTransitSchedules
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val cachedMapTiles: StateFlow<List<CachedMapTileEntity>> = repository.cachedMapTiles
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isOfflineModeActive = MutableStateFlow(false)
+    val isOfflineModeActive: StateFlow<Boolean> = _isOfflineModeActive.asStateFlow()
 
     private val _userMessage = MutableStateFlow<String?>(null)
     val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
@@ -283,7 +406,104 @@ class NightViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addFrequentDestination(
+        title: String,
+        address: String,
+        category: String,
+        preferredMode: String,
+        notes: String = ""
+    ) {
+        if (title.isBlank() || address.isBlank()) return
+        viewModelScope.launch {
+            repository.addFrequentDestination(
+                FrequentDestinationEntity(
+                    title = title,
+                    address = address,
+                    category = category.ifBlank { "Favorite" },
+                    preferredMode = preferredMode,
+                    notes = notes
+                )
+            )
+            _userMessage.value = "Added $title to frequent trip planner."
+        }
+    }
+
+    fun deleteFrequentDestination(id: Int) {
+        viewModelScope.launch {
+            repository.deleteFrequentDestination(id)
+            _userMessage.value = "Frequent destination removed."
+        }
+    }
+
+    fun applyFrequentDestination(destinationEntity: FrequentDestinationEntity) {
+        val spot = LocationSpot(
+            id = "freq_${destinationEntity.id}",
+            name = destinationEntity.title,
+            category = destinationEntity.category,
+            address = destinationEntity.address,
+            isSafetyKioskNearby = true,
+            latitude = destinationEntity.latitude,
+            longitude = destinationEntity.longitude
+        )
+        _destination.value = spot
+        
+        // Also apply preferred mode filter if valid
+        val mode = runCatching { TransportMode.valueOf(destinationEntity.preferredMode) }.getOrDefault(TransportMode.ALL)
+        _selectedModeFilter.value = mode
+
+        recalculateRoutes()
+        _userMessage.value = "Applied ${destinationEntity.title} with preferred mode ${destinationEntity.preferredMode}!"
+    }
+
     fun clearUserMessage() {
         _userMessage.value = null
+    }
+
+    fun toggleOfflineMode() {
+        _isOfflineModeActive.value = !_isOfflineModeActive.value
+        val statusText = if (_isOfflineModeActive.value) "Offline Low-Connectivity Mode Enabled (Using Room Cache)" else "Online Live Data Restored"
+        _userMessage.value = statusText
+    }
+
+    fun syncOfflineTransitAndTiles() {
+        viewModelScope.launch {
+            // Refresh/Store current route schedules and map tiles into Room
+            val now = System.currentTimeMillis()
+            repository.cacheTransitSchedule(
+                CachedTransitScheduleEntity(
+                    stationId = "st_sync_${now % 1000}",
+                    stationName = "${_origin.value.name} Transit Shelter",
+                    lineCode = "Night Express N-Sync",
+                    nextDeparturesJson = "1:30 AM, 1:50 AM, 2:10 AM",
+                    cachedAtTimestamp = now,
+                    isOfflineAvailable = true
+                )
+            )
+            repository.cacheMapTile(
+                CachedMapTileEntity(
+                    tileKey = "z14_x${(now / 100000) % 5000}_y${(now / 80000) % 5000}",
+                    regionName = "${_origin.value.name} → ${_destination.value.name} Vector Corridor",
+                    zoomLevel = 14,
+                    cachedAtTimestamp = now,
+                    dataSizeBytes = 450000,
+                    isOfflineReady = true
+                )
+            )
+            _userMessage.value = "Synced latest transit schedules & map tiles to Room database!"
+        }
+    }
+
+    fun deleteCachedSchedule(stationId: String) {
+        viewModelScope.launch {
+            repository.deleteCachedTransitSchedule(stationId)
+            _userMessage.value = "Removed schedule cache for $stationId."
+        }
+    }
+
+    fun clearTileCache() {
+        viewModelScope.launch {
+            repository.clearAllMapTiles()
+            _userMessage.value = "Map tiles cache cleared from Room DB."
+        }
     }
 }

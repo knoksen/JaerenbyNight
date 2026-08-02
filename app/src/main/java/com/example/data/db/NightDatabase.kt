@@ -9,9 +9,12 @@ import androidx.room.RoomDatabase
     entities = [
         SavedRouteEntity::class,
         EmergencyContactEntity::class,
-        NightSafetyLogEntity::class
+        NightSafetyLogEntity::class,
+        FrequentDestinationEntity::class,
+        CachedTransitScheduleEntity::class,
+        CachedMapTileEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class NightDatabase : RoomDatabase() {
@@ -27,7 +30,7 @@ abstract class NightDatabase : RoomDatabase() {
                     context.applicationContext,
                     NightDatabase::class.java,
                     "night_commute_db"
-                ).build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

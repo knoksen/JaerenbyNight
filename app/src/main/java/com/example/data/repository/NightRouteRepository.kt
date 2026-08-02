@@ -1,6 +1,9 @@
 package com.example.data.repository
 
+import com.example.data.db.CachedMapTileEntity
+import com.example.data.db.CachedTransitScheduleEntity
 import com.example.data.db.EmergencyContactEntity
+import com.example.data.db.FrequentDestinationEntity
 import com.example.data.db.NightDao
 import com.example.data.db.NightSafetyLogEntity
 import com.example.data.db.SavedRouteEntity
@@ -19,6 +22,9 @@ class NightRouteRepository(private val dao: NightDao) {
     val savedRoutes: Flow<List<SavedRouteEntity>> = dao.getAllSavedRoutes()
     val emergencyContacts: Flow<List<EmergencyContactEntity>> = dao.getAllEmergencyContacts()
     val safetyLogs: Flow<List<NightSafetyLogEntity>> = dao.getAllSafetyLogs()
+    val frequentDestinations: Flow<List<FrequentDestinationEntity>> = dao.getAllFrequentDestinations()
+    val cachedTransitSchedules: Flow<List<CachedTransitScheduleEntity>> = dao.getAllCachedTransitSchedules()
+    val cachedMapTiles: Flow<List<CachedMapTileEntity>> = dao.getAllCachedMapTiles()
 
     suspend fun saveRoute(route: SavedRouteEntity) = dao.insertSavedRoute(route)
     suspend fun deleteSavedRoute(id: Int) = dao.deleteSavedRouteById(id)
@@ -27,6 +33,16 @@ class NightRouteRepository(private val dao: NightDao) {
     suspend fun deleteEmergencyContact(id: Int) = dao.deleteEmergencyContactById(id)
 
     suspend fun logSafetyTrip(log: NightSafetyLogEntity) = dao.insertSafetyLog(log)
+
+    suspend fun addFrequentDestination(destination: FrequentDestinationEntity) = dao.insertFrequentDestination(destination)
+    suspend fun deleteFrequentDestination(id: Int) = dao.deleteFrequentDestinationById(id)
+
+    suspend fun cacheTransitSchedule(schedule: CachedTransitScheduleEntity) = dao.insertCachedTransitSchedule(schedule)
+    suspend fun deleteCachedTransitSchedule(stationId: String) = dao.deleteCachedTransitSchedule(stationId)
+
+    suspend fun cacheMapTile(tile: CachedMapTileEntity) = dao.insertCachedMapTile(tile)
+    suspend fun deleteCachedMapTile(tileKey: String) = dao.deleteCachedMapTile(tileKey)
+    suspend fun clearAllMapTiles() = dao.clearAllCachedMapTiles()
 
     fun getPopularLocations(): List<LocationSpot> {
         return listOf(

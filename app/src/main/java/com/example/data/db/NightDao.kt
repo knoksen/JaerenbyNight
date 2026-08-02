@@ -34,4 +34,37 @@ interface NightDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSafetyLog(log: NightSafetyLogEntity)
+
+    // Trip Planner: Frequent Destinations & Preferred Modes
+    @Query("SELECT * FROM frequent_destinations ORDER BY timestamp DESC")
+    fun getAllFrequentDestinations(): Flow<List<FrequentDestinationEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFrequentDestination(destination: FrequentDestinationEntity)
+
+    @Query("DELETE FROM frequent_destinations WHERE id = :id")
+    suspend fun deleteFrequentDestinationById(id: Int)
+
+    // Cached Transit Schedules (Offline Connectivity)
+    @Query("SELECT * FROM cached_transit_schedules ORDER BY cachedAtTimestamp DESC")
+    fun getAllCachedTransitSchedules(): Flow<List<CachedTransitScheduleEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCachedTransitSchedule(schedule: CachedTransitScheduleEntity)
+
+    @Query("DELETE FROM cached_transit_schedules WHERE stationId = :stationId")
+    suspend fun deleteCachedTransitSchedule(stationId: String)
+
+    // Cached Map Tiles (Offline Connectivity)
+    @Query("SELECT * FROM cached_map_tiles ORDER BY cachedAtTimestamp DESC")
+    fun getAllCachedMapTiles(): Flow<List<CachedMapTileEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCachedMapTile(tile: CachedMapTileEntity)
+
+    @Query("DELETE FROM cached_map_tiles WHERE tileKey = :tileKey")
+    suspend fun deleteCachedMapTile(tileKey: String)
+
+    @Query("DELETE FROM cached_map_tiles")
+    suspend fun clearAllCachedMapTiles()
 }

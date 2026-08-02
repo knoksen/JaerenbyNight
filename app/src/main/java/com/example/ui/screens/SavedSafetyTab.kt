@@ -55,9 +55,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.db.EmergencyContactEntity
+import com.example.data.db.FrequentDestinationEntity
 import com.example.data.db.NightSafetyLogEntity
 import com.example.data.db.SavedRouteEntity
+import com.example.ui.components.FrequentDestinationsCard
+import com.example.ui.components.OfflineCacheManagerCard
 import com.example.ui.theme.DangerRed
 import com.example.ui.theme.MidnightBackground
 import com.example.ui.theme.MidnightCardBorder
@@ -80,6 +84,10 @@ fun SavedSafetyTab(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val frequentDestinations by viewModel.frequentDestinations.collectAsStateWithLifecycle()
+    val isOfflineModeActive by viewModel.isOfflineModeActive.collectAsStateWithLifecycle()
+    val cachedTransitSchedules by viewModel.cachedTransitSchedules.collectAsStateWithLifecycle()
+    val cachedMapTiles by viewModel.cachedMapTiles.collectAsStateWithLifecycle()
     var showAddContactForm by remember { mutableStateOf(false) }
 
     var newName by remember { mutableStateOf("") }
@@ -273,6 +281,31 @@ fun SavedSafetyTab(
                     }
                 }
             }
+        }
+
+        // Room DB: Offline Transit Schedules & Map Tile Caching Manager
+        item {
+            OfflineCacheManagerCard(
+                isOfflineModeActive = isOfflineModeActive,
+                cachedSchedules = cachedTransitSchedules,
+                cachedTiles = cachedMapTiles,
+                onToggleOfflineMode = { viewModel.toggleOfflineMode() },
+                onSyncOfflineCache = { viewModel.syncOfflineTransitAndTiles() },
+                onDeleteSchedule = { id -> viewModel.deleteCachedSchedule(id) },
+                onClearTileCache = { viewModel.clearTileCache() }
+            )
+        }
+
+        // Trip Planner: Frequent Destinations & Preferred Transport Modes (Room DB)
+        item {
+            FrequentDestinationsCard(
+                frequentDestinations = frequentDestinations,
+                onSelectDestination = { dest -> viewModel.applyFrequentDestination(dest) },
+                onAddDestination = { title, address, category, preferredMode, notes ->
+                    viewModel.addFrequentDestination(title, address, category, preferredMode, notes)
+                },
+                onDeleteDestination = { id -> viewModel.deleteFrequentDestination(id) }
+            )
         }
 
         // Saved Offline Night Routes
